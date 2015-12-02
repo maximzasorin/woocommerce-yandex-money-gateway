@@ -25,9 +25,8 @@ class WC_Yandex_Money_Gateway extends WC_Payment_Gateway {
 			$this->$setting_key = $value;
 		}
 		
-		add_action( 'woocommerce_receipt_' . $this->id, array($this, 'receipt_page') );
-		add_action( 'woocommerce_api_wc_' . $this->id, array($this, 'check_ipn_response') );
-		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+		add_action( 'woocommerce_receipt_' . $this->id, array( $this, 'receipt_page' ) );
+		add_action( 'woocommerce_api_' . $this->id, array( $this, 'check_ipn_response' ) );
 
 		// Save settings
 		if ( is_admin() ) {
@@ -83,6 +82,7 @@ class WC_Yandex_Money_Gateway extends WC_Payment_Gateway {
 				'targets' => $order_name,
 				'sum' => $order->order_total,
 				'paymentType' => 'AC',
+				'label' => $order_id,
 			);
 
 		$paypal_args = apply_filters('woocommerce_robokassa_args', $args);
@@ -112,5 +112,33 @@ class WC_Yandex_Money_Gateway extends WC_Payment_Gateway {
 	public function receipt_page($order) {
 		print '<p>'.__('Thank you for your order, push button below to pay.', 'woocommerce').'</p>';
 		print $this->generate_form($order);
+	}
+
+	// usage: /?wc-api=wc_yandex_money_gateway
+	public function check_ipn_response() {
+		$sha1_hash = $_POST['sha1_hash'];
+
+		$string = array(
+			$_POST['notification_type'],
+			$_POST['operation_id'],
+			$_POST['amount'],
+			$_POST['currency'],
+			$_POST['datetime'],
+			$_POST['sender'],
+			$_POST['codepro'],
+			$this->notification_secret,
+			$_POST['label']
+		);
+
+		$sha1_string = sha1(implode('&', $string));
+
+		if ( $sha1_hash == $sha1_string ) {
+			$order = new WC_Order($_POST['label']);
+			$order->payment_complete();
+
+			exit();
+		} else {
+			wp_die();
+		}
 	}
 }
